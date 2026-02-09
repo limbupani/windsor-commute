@@ -120,6 +120,25 @@ This file serves as the **agent's engineering memory and decision guardrail**. I
   - **NEVER**: Apply fixes without understanding the problem
   - **Why**: Blind fixes can create new problems or miss the real issue
 
+- **✓ Rule 11: No Duplicate Screen Files**
+  - Each logical screen MUST have exactly one implementation in the codebase
+  - **NEVER**: Have both `folder/index.tsx` and `folder.tsx` for the same screen
+  - **Pattern**: Use directory-based screens (prefer `app/route/index.tsx` over loose `app/route.tsx`)
+  - **Why**: Expo Router uses file-based routing and cannot disambiguate between duplicates; this causes undefined behavior
+  - **Example of WRONG**: Having both `app/select-role.tsx` and `app/select-role/index.tsx`
+  - **Example of CORRECT**: Only `app/select-role/index.tsx`
+
+- **✓ Rule 12: All Route Group Index Files Must Have Content**
+  - Every `_layout.tsx` defines a Stack, which routes to child screens
+  - Every route group MUST have an `index.tsx` file (or redirects are needed)
+  - **If** `index.tsx` exists, it MUST export a component (not be empty)
+  - **Options**:
+    1. Implement a screen component in `index.tsx`, OR
+    2. Use a Redirect component to another screen, OR
+    3. Delete the file entirely if not needed
+  - **NEVER**: Leave a route group's `index.tsx` as an empty file (0 bytes)
+  - **Why**: Empty files cause React render failures and undefined behavior
+
 ---
 
 ## Issue Log (Cumulative)
@@ -228,11 +247,61 @@ export default function GroupNameLayout() {
 
 ---
 
+### Issue #2: Empty/Stub Files in Route Groups (DISCOVERED ⚠️)
+
+**Date Discovered**: February 9, 2026  
+**Severity**: Critical  
+**Status**: IDENTIFIED - Requires fixes
+
+**Summary**:
+Three empty/stub files exist in route groups that would cause runtime failures:
+1. `app/(host)/index.tsx` - 0 bytes (empty)
+2. `app/(rider)/index.tsx` - 0 bytes (empty)  
+3. `app/(rider)/home.tsx` - 0 bytes (orphaned)
+
+Additionally, a duplicate/conflicting file exists:
+4. `app/select-role.tsx` - Orphaned file that contradicts the correct `app/select-role/index.tsx`
+
+**Root Cause**:
+1. **Incomplete Setup**: Route group index files were created but not implemented
+2. **Orphaned File**: Old `app/select-role.tsx` was not deleted when directory-based `app/select-role/` was created
+3. **No Validation**: No checks prevented empty files from being committed
+
+**Why It Breaks**:
+- Empty files have no React component export → render fails
+- If navigation reaches `/(host)` or `/(rider)` without sub-route, app crashes
+- Duplicate `select-role.tsx` causes TypeScript error (TS2345 on invalid navigation path)
+- Build fails due to TypeScript compilation error
+
+**Files Affected**:
+```
+app/(host)/index.tsx          ← EMPTY (0 bytes)
+app/(rider)/index.tsx         ← EMPTY (0 bytes)
+app/(rider)/home.tsx          ← EMPTY (0 bytes) - orphaned
+app/select-role.tsx           ← DUPLICATE (32 lines, wrong navigation)
+app/select-role/index.tsx     ← CORRECT (112 lines, proper JaBo branding)
+```
+
+**Suggested Fixes**:
+1. **Delete** `app/select-role.tsx` (orphaned, wrong version)
+2. **Implement** `app/(host)/index.tsx` with redirect to `/(host)/login`
+3. **Implement** `app/(rider)/index.tsx` with redirect to `/(rider)/login`
+4. **Delete** `app/(rider)/home.tsx` (orphaned, not used)
+
+**How to Prevent Recurrence**:
+- **Global Guardrails Created**: Rule 11 (No Duplicates) and Rule 12 (All Index Files Have Content)
+- **Diagnostic Process**: Now have DIAGNOSTIC_REPORT.md for regular system scans
+- **File Validation**: Check for empty files before merging PRs
+- **Code Review**: Verify all route group directories have properly implemented index files
+
+**Related Files**:
+- `DIAGNOSTIC_REPORT.md` - Complete scan with all issues documented
+
 ## Future Issues and Updates
 
 This section will be updated when new issues are discovered or fixed.
 
-**Placeholder for Issue #2** (when discovered):
+**Placeholder for Issue #3** (when discovered):
 - Date: TBD
 - Summary: TBD
 - Root Cause: TBD
